@@ -38,7 +38,7 @@ public class AgricultureSimulation {
 
     static LocationHandler locator;
 
-    static boolean CLOUD = false;
+    static boolean CLOUD = true;
 
     static double SENSOR_TRANSMISSION_TIME = 10;
 
@@ -56,7 +56,7 @@ public class AgricultureSimulation {
     static String Ptz_Actuator_Type = "PTZ_CONTROL";
 
     static String Router_Device_Name = "Router";
-    static int Cam_Per_Router = 2;
+    static int Cam_Per_Router = 1;
 
     static int totalArea = 1;
     static int Pir_Per_Router = 1;
@@ -88,6 +88,35 @@ public class AgricultureSimulation {
     static String Motion_Analyzer_Output = "ANALYSIS";
     static String Motion_Analyzer = "Motion_Analyzer";
 
+    //
+    static int Smoke_Per_Router = 1;
+    static String SmokeDetector_Device_Name = "SMOKE";
+    static String Smoke_Sensor_Name = "SMOKE_SENSOR";
+
+    static String FIRE_ANALYZER = "Fire_Analyzer";
+
+    static String FIRE_ANALYZER_OUTPUT = "Fire_Alert";
+
+    static String Smoke_Tuple_Type = "SMOKE";
+
+    static String Forwarder_Smoke = "Forwarder_Smoke";
+    //
+
+
+    //
+    static int WaterAndAir_Per_Router = 1;
+    static String WaterAndAir_Device_Name = "WAA";
+    static String WaterAndAir_Sensor_Name = "WATER_AND_AIR_QUALITY_SENSOR";
+
+    static String Quality_ANALYZER = "QUALITY_Analyzer";
+
+    static String Quality_ANALYZER_OUTPUT = "QUALITY_Alert";
+
+    static String WaterAndAir_Tuple_Type = "WAA";
+
+    static String Forwarder_WA = "Forwarder_WA";
+    //
+
 
     public static void main(String[] args) {
         try {
@@ -117,8 +146,15 @@ public class AgricultureSimulation {
                 moduleMapping.addModuleToDevice(Motion_Tracker_Output,"cloud");
                 moduleMapping.addModuleToDevice(Motion_Detector,"cloud");
                 moduleMapping.addModuleToDevice("object_tracker", "cloud");
+                moduleMapping.addModuleToDevice(Quality_ANALYZER,"cloud");
+//                moduleMapping.addModuleToDevice(Forwarder_WA,"cloud");
                 moduleMapping.addModuleToDevice(High_Temperature_Detector,"cloud");// placing all instances of Object Tracker module in the Cloud
-                moduleMapping.addModuleToDevice(Forwarder_Temp,"cloud");
+//                moduleMapping.addModuleToDevice(Forwarder_Temp,"cloud");
+                moduleMapping.addModuleToDevice(FIRE_ANALYZER,"cloud");
+//                moduleMapping.addModuleToDevice(Forwarder_Smoke,"cloud");
+
+
+
             }
             else {
                 for(FogDevice device : fogDevices) {
@@ -134,15 +170,25 @@ public class AgricultureSimulation {
                     if(Temp_Device_Name.equals(suffix)) {
                         moduleMapping.addModuleToDevice(High_Temperature_Detector,deviceName);
                     }
+                    if(SmokeDetector_Device_Name.equals(suffix)) {
+                        moduleMapping.addModuleToDevice(FIRE_ANALYZER,deviceName);
+                    }
+                    if(WaterAndAir_Device_Name.equals(suffix)) {
+                        moduleMapping.addModuleToDevice(Quality_ANALYZER,deviceName);
+                    }
                     if(Router_Device_Name.equals(suffix)) {
                         moduleMapping.addModuleToDevice("object_detector",deviceName);
                         moduleMapping.addModuleToDevice(Motion_Tracker,deviceName);
                         moduleMapping.addModuleToDevice(Forwarder_Temp,deviceName);
+                        moduleMapping.addModuleToDevice(Forwarder_Smoke,deviceName);
+                        moduleMapping.addModuleToDevice(Forwarder_WA,deviceName);
                     }
                     if(Proxy_Server_Base_Name.equals(deviceName)) {
                         moduleMapping.addModuleToDevice("object_tracker",deviceName);
                         moduleMapping.addModuleToDevice(Motion_Analyzer,deviceName);
                         moduleMapping.addModuleToDevice(Forwarder_Temp,deviceName);
+                        moduleMapping.addModuleToDevice(Forwarder_Smoke,deviceName);
+                        moduleMapping.addModuleToDevice(Forwarder_WA,deviceName);
                     }
 
                 }
@@ -264,6 +310,10 @@ public class AgricultureSimulation {
         application.addAppModule(Motion_Analyzer,10);
         application.addAppModule(Forwarder_Temp,10);
         application.addAppModule(High_Temperature_Detector,10);
+        application.addAppModule(FIRE_ANALYZER,10);
+        application.addAppModule(Forwarder_Smoke,10);
+        application.addAppModule(Quality_ANALYZER,10);
+        application.addAppModule(Forwarder_WA,10);
 
 
         /*
@@ -277,7 +327,21 @@ public class AgricultureSimulation {
         application.addAppEdge("object_detector", "object_tracker", 1000, 100, "OBJECT_LOCATION", Tuple.UP, AppEdge.MODULE); // adding edge from Object Detector to Object Tracker module carrying tuples of type OBJECT_LOCATION
         application.addAppEdge("object_tracker", "PTZ_CONTROL", 100, 28, 100, "PTZ_PARAMS", Tuple.DOWN, AppEdge.ACTUATOR); // adding edge from Object Tracker to PTZ CONTROL (actuator) carrying tuples of type PTZ_PARAMS
 
+        application.addAppEdge(WaterAndAir_Device_Name,Quality_ANALYZER,2000,100,WaterAndAir_Tuple_Type,Tuple.UP,AppEdge.SENSOR);
+        application.addAppEdge(Quality_ANALYZER,"user_interface",2000,2000,Quality_ANALYZER_OUTPUT,Tuple.UP,AppEdge.MODULE);
+        application.addAppEdge(Quality_ANALYZER,Forwarder_WA,2000,2000,Quality_ANALYZER_OUTPUT,Tuple.UP,AppEdge.MODULE);
+        application.addAppEdge(Forwarder_WA,Forwarder_WA,2000,2000,Quality_ANALYZER_OUTPUT,Tuple.UP,AppEdge.MODULE);
+        application.addAppEdge(Forwarder_WA,"user_interface",2000,200,Quality_ANALYZER_OUTPUT,Tuple.UP,AppEdge.MODULE);
+
+
+        application.addAppEdge(SmokeDetector_Device_Name,FIRE_ANALYZER,2000,100,Smoke_Tuple_Type,Tuple.UP,AppEdge.SENSOR);
+        application.addAppEdge(FIRE_ANALYZER,"user_interface",2000,2000,FIRE_ANALYZER_OUTPUT,Tuple.UP,AppEdge.MODULE);
+        application.addAppEdge(FIRE_ANALYZER,Forwarder_Smoke,2000,2000,FIRE_ANALYZER_OUTPUT,Tuple.UP,AppEdge.MODULE);
+        application.addAppEdge(Forwarder_Smoke,Forwarder_Smoke,2000,2000,FIRE_ANALYZER_OUTPUT,Tuple.UP,AppEdge.MODULE);
+        application.addAppEdge(Forwarder_Smoke,"user_interface",2000,200,FIRE_ANALYZER_OUTPUT,Tuple.UP,AppEdge.MODULE);
+
         application.addAppEdge(Temp_Device_Name,High_Temperature_Detector,2000,100,Temp_Tuple_Type,Tuple.UP,AppEdge.SENSOR);
+        application.addAppEdge(High_Temperature_Detector,"user_interface",2000,2000,High_Temperature_Detector_Output,Tuple.UP,AppEdge.MODULE);
         application.addAppEdge(High_Temperature_Detector,Forwarder_Temp,2000,2000,High_Temperature_Detector_Output,Tuple.UP,AppEdge.MODULE);
         application.addAppEdge(Forwarder_Temp,Forwarder_Temp,2000,2000,High_Temperature_Detector_Output,Tuple.UP,AppEdge.MODULE);
         application.addAppEdge(Forwarder_Temp,"user_interface",2000,200,High_Temperature_Detector_Output,Tuple.UP,AppEdge.MODULE);
@@ -301,6 +365,13 @@ public class AgricultureSimulation {
         application.addTupleMapping(High_Temperature_Detector,Temp_Tuple_Type,High_Temperature_Detector_Output,new FractionalSelectivity(0.05));
         application.addTupleMapping(Forwarder_Temp,High_Temperature_Detector,High_Temperature_Detector_Output,new FractionalSelectivity(1.0));
 
+        application.addTupleMapping(FIRE_ANALYZER,Smoke_Tuple_Type,FIRE_ANALYZER_OUTPUT,new FractionalSelectivity(0.05));
+        application.addTupleMapping(Forwarder_Smoke,FIRE_ANALYZER_OUTPUT,FIRE_ANALYZER_OUTPUT,new FractionalSelectivity(1.0));
+
+        application.addTupleMapping(Quality_ANALYZER,WaterAndAir_Tuple_Type,Quality_ANALYZER_OUTPUT,new FractionalSelectivity(0.05));
+        application.addTupleMapping(Forwarder_WA,Quality_ANALYZER_OUTPUT,Quality_ANALYZER_OUTPUT,new FractionalSelectivity(1.0));
+
+
         /*
          * Defining application loops (maybe incomplete loops) to monitor the latency of.
          * Here, we add two loops for monitoring : Motion Detector -> Object Detector -> Object Tracker and Object Tracker -> PTZ Control
@@ -311,8 +382,13 @@ public class AgricultureSimulation {
        final AppLoop loop3 = new AppLoop(new ArrayList<String>(){{add(Motion_Detector);add(Motion_Tracker);add(Motion_Detector);}});
         final AppLoop loop4 = new AppLoop(new ArrayList<String>(){{add(High_Temperature_Detector);add(Forwarder_Temp);}});
 
+        final AppLoop loop5 = new AppLoop(new ArrayList<String>(){{add(FIRE_ANALYZER);add(Forwarder_Smoke);}});
 
-        List<AppLoop> loops = new ArrayList<AppLoop>(){{add(loop1);add(loop2);add(loop3);add(loop4);}};
+        final AppLoop loop6 = new AppLoop(new ArrayList<String>(){{add(Quality_ANALYZER);add(Forwarder_WA);}});
+
+
+
+        List<AppLoop> loops = new ArrayList<AppLoop>(){{add(loop1);add(loop2);add(loop3);add(loop4);add(loop5);add(loop6);}};
 
         application.setLoops(loops);
         return application;
@@ -356,6 +432,26 @@ public class AgricultureSimulation {
         sensor.setLatency(1.0);  // latency of connection between camera (sensor) and the parent Smart Camera is 1 ms
         return temp;
     }
+
+    public static FogDevice createSmokeSensor(int deviceNum,String appId,int userId,int parentId) {
+        FogDevice smokedetector = createFogDevice(SmokeDetector_Device_Name + "_" + deviceNum, 500, 100, 10000, 10000, 3, 0.005, 87.53, 82.44);
+        smokedetector.setParentId(parentId);
+        Sensor sensor = new Sensor(Smoke_Sensor_Name + "_"+deviceNum,Smoke_Tuple_Type, userId, appId, new DeterministicDistribution(5)); // inter-transmission time of camera (sensor) follows a deterministic distribution
+        sensors.add(sensor);
+        sensor.setGatewayDeviceId(smokedetector.getId());
+        sensor.setLatency(1.0);  // latency of connection between camera (sensor) and the parent Smart Camera is 1 ms
+        return smokedetector;
+    }
+
+    public static FogDevice createWaterAndAirSensor(int deviceNum,String appId,int userId,int parentId) {
+        FogDevice WaterAndAirQualityDetector = createFogDevice(WaterAndAir_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
+        WaterAndAirQualityDetector.setParentId(parentId);
+        Sensor sensor = new Sensor(WaterAndAir_Sensor_Name + "_"+deviceNum,WaterAndAir_Tuple_Type, userId, appId, new DeterministicDistribution(5)); // inter-transmission time of camera (sensor) follows a deterministic distribution
+        sensors.add(sensor);
+        sensor.setGatewayDeviceId(WaterAndAirQualityDetector.getId());
+        sensor.setLatency(1.0);  // latency of connection between camera (sensor) and the parent Smart Camera is 1 ms
+        return WaterAndAirQualityDetector;
+    }
    public static void createAndPopulateRouter(int deviceNum,String appId,int userId,int parentId) {
        FogDevice router = createFogDevice(Router_Device_Name+"_"+deviceNum, 2800, 4000, 10000, 10000, 2, 0.005, 107.339, 83.4333);
        router.setParentId(parentId);
@@ -375,6 +471,16 @@ public class AgricultureSimulation {
            FogDevice temp = createTemperatureSensor(k,appId,userId, router.getId());
            temp.setUplinkLatency(2);
            fogDevices.add(temp);
+       }
+       for (int m=0;m<Smoke_Per_Router;m++) {
+           FogDevice smoke_detector = createSmokeSensor(m,appId,userId, router.getId());
+           smoke_detector.setUplinkLatency(2);
+           fogDevices.add(smoke_detector);
+       }
+       for (int n=0;n<WaterAndAir_Per_Router;n++) {
+           FogDevice smoke_detector = createWaterAndAirSensor(n,appId,userId, router.getId());
+           smoke_detector.setUplinkLatency(2);
+           fogDevices.add(smoke_detector);
        }
    }
 
