@@ -63,13 +63,24 @@ public class AgricultureSimulation {
     static String Pir_Device_Name = "PIR";
     static String Pir_Sensor_Name = "PIR_SENSOR";
 
-    static String Motion_Detector = "motion_detector";
-
     static String Pir_Tuple_Type = "PIR";
 
+    //
+    static int Temp_Per_Router = 1;
+    static String Temp_Device_Name = "TEMP";
+    static String Temp_Sensor_Name = "Temperature_SENSOR";
+
+    static String High_Temperature_Detector = "Temperature_Analyzer";
+
+    static String High_Temperature_Detector_Output = "Temperature_Analyzer_Output";
+
+    static String Temp_Tuple_Type = "TEMP";
+
+    //
+    static String Motion_Detector = "motion_detector";
     static  String Motion_Detector_Output = "MOTION_DETECTED";
 
-    static String Forwarder = "Forwarder";
+    static String Forwarder_Temp = "Forwarder";
 
     static String Motion_Tracker = "MOTION_TRACKER";
 
@@ -105,8 +116,9 @@ public class AgricultureSimulation {
                 moduleMapping.addModuleToDevice(Motion_Detector,"cloud");
                 moduleMapping.addModuleToDevice(Motion_Tracker_Output,"cloud");
                 moduleMapping.addModuleToDevice(Motion_Detector,"cloud");
-                moduleMapping.addModuleToDevice("object_tracker", "cloud"); // placing all instances of Object Tracker module in the Cloud
-
+                moduleMapping.addModuleToDevice("object_tracker", "cloud");
+                moduleMapping.addModuleToDevice(High_Temperature_Detector,"cloud");// placing all instances of Object Tracker module in the Cloud
+                moduleMapping.addModuleToDevice(Forwarder_Temp,"cloud");
             }
             else {
                 for(FogDevice device : fogDevices) {
@@ -119,13 +131,18 @@ public class AgricultureSimulation {
                     if(Pir_Device_Name.equals(suffix)) {
                         moduleMapping.addModuleToDevice(Motion_Detector,deviceName);
                     }
+                    if(Temp_Device_Name.equals(suffix)) {
+                        moduleMapping.addModuleToDevice(High_Temperature_Detector,deviceName);
+                    }
                     if(Router_Device_Name.equals(suffix)) {
                         moduleMapping.addModuleToDevice("object_detector",deviceName);
                         moduleMapping.addModuleToDevice(Motion_Tracker,deviceName);
+                        moduleMapping.addModuleToDevice(Forwarder_Temp,deviceName);
                     }
                     if(Proxy_Server_Base_Name.equals(deviceName)) {
                         moduleMapping.addModuleToDevice("object_tracker",deviceName);
                         moduleMapping.addModuleToDevice(Motion_Analyzer,deviceName);
+                        moduleMapping.addModuleToDevice(Forwarder_Temp,deviceName);
                     }
 
                 }
@@ -245,6 +262,8 @@ public class AgricultureSimulation {
         // application.addAppModule(Forwarder,10);
         application.addAppModule(Motion_Tracker,10);
         application.addAppModule(Motion_Analyzer,10);
+        application.addAppModule(Forwarder_Temp,10);
+        application.addAppModule(High_Temperature_Detector,10);
 
 
         /*
@@ -257,6 +276,11 @@ public class AgricultureSimulation {
         application.addAppEdge("object_detector", "user_interface", 500, 2000, "DETECTED_OBJECT", Tuple.UP, AppEdge.MODULE); // adding edge from Object Detector to User Interface module carrying tuples of type DETECTED_OBJECT
         application.addAppEdge("object_detector", "object_tracker", 1000, 100, "OBJECT_LOCATION", Tuple.UP, AppEdge.MODULE); // adding edge from Object Detector to Object Tracker module carrying tuples of type OBJECT_LOCATION
         application.addAppEdge("object_tracker", "PTZ_CONTROL", 100, 28, 100, "PTZ_PARAMS", Tuple.DOWN, AppEdge.ACTUATOR); // adding edge from Object Tracker to PTZ CONTROL (actuator) carrying tuples of type PTZ_PARAMS
+
+        application.addAppEdge(Temp_Device_Name,High_Temperature_Detector,2000,100,Temp_Tuple_Type,Tuple.UP,AppEdge.SENSOR);
+        application.addAppEdge(High_Temperature_Detector,Forwarder_Temp,2000,2000,High_Temperature_Detector_Output,Tuple.UP,AppEdge.MODULE);
+        application.addAppEdge(Forwarder_Temp,Forwarder_Temp,2000,2000,High_Temperature_Detector_Output,Tuple.UP,AppEdge.MODULE);
+        application.addAppEdge(Forwarder_Temp,"user_interface",2000,200,High_Temperature_Detector_Output,Tuple.UP,AppEdge.MODULE);
 
         application.addAppEdge(Pir_Device_Name,Motion_Detector,1000,200,Pir_Tuple_Type,Tuple.UP,AppEdge.SENSOR);
         application.addAppEdge(Motion_Detector,Motion_Tracker,500,200,Motion_Detector_Output,Tuple.UP, AppEdge.MODULE);
@@ -274,6 +298,9 @@ public class AgricultureSimulation {
         application.addTupleMapping(Motion_Analyzer,Motion_Tracker_Output,Motion_Analyzer_Output,new FractionalSelectivity(1.0));
         // application.addTupleMapping(Forwarder,Motion_Detector_Output,Motion_Detector_Output,new FractionalSelectivity(1.0));
 
+        application.addTupleMapping(High_Temperature_Detector,Temp_Tuple_Type,High_Temperature_Detector_Output,new FractionalSelectivity(0.05));
+        application.addTupleMapping(Forwarder_Temp,High_Temperature_Detector,High_Temperature_Detector_Output,new FractionalSelectivity(1.0));
+
         /*
          * Defining application loops (maybe incomplete loops) to monitor the latency of.
          * Here, we add two loops for monitoring : Motion Detector -> Object Detector -> Object Tracker and Object Tracker -> PTZ Control
@@ -282,7 +309,10 @@ public class AgricultureSimulation {
         final AppLoop loop2 = new AppLoop(new ArrayList<String>(){{add("object_tracker");add("PTZ_CONTROL");}});
 
        final AppLoop loop3 = new AppLoop(new ArrayList<String>(){{add(Motion_Detector);add(Motion_Tracker);add(Motion_Detector);}});
-        List<AppLoop> loops = new ArrayList<AppLoop>(){{add(loop1);add(loop2);add(loop3);}};
+        final AppLoop loop4 = new AppLoop(new ArrayList<String>(){{add(High_Temperature_Detector);add(Forwarder_Temp);}});
+
+
+        List<AppLoop> loops = new ArrayList<AppLoop>(){{add(loop1);add(loop2);add(loop3);add(loop4);}};
 
         application.setLoops(loops);
         return application;
@@ -315,6 +345,17 @@ public class AgricultureSimulation {
         sensor.setLatency(1.0);  // latency of connection between camera (sensor) and the parent Smart Camera is 1 ms
         return Pir;
     }
+
+
+    public static FogDevice createTemperatureSensor(int deviceNum,String appId,int userId,int parentId) {
+        FogDevice temp = createFogDevice(Temp_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
+        temp.setParentId(parentId);
+        Sensor sensor = new Sensor(Temp_Sensor_Name + "_"+deviceNum,Temp_Tuple_Type, userId, appId, new DeterministicDistribution(5)); // inter-transmission time of camera (sensor) follows a deterministic distribution
+        sensors.add(sensor);
+        sensor.setGatewayDeviceId(temp.getId());
+        sensor.setLatency(1.0);  // latency of connection between camera (sensor) and the parent Smart Camera is 1 ms
+        return temp;
+    }
    public static void createAndPopulateRouter(int deviceNum,String appId,int userId,int parentId) {
        FogDevice router = createFogDevice(Router_Device_Name+"_"+deviceNum, 2800, 4000, 10000, 10000, 2, 0.005, 107.339, 83.4333);
        router.setParentId(parentId);
@@ -324,12 +365,16 @@ public class AgricultureSimulation {
 
            cam.setUplinkLatency(2);
            fogDevices.add(cam);
-
        }
        for (int j=0;j<Pir_Per_Router;j++) {
            FogDevice pir = createPir(j,appId,userId, router.getId());
            pir.setUplinkLatency(2);
            fogDevices.add(pir);
+       }
+       for (int k=0;k<Temp_Per_Router;k++) {
+           FogDevice temp = createTemperatureSensor(k,appId,userId, router.getId());
+           temp.setUplinkLatency(2);
+           fogDevices.add(temp);
        }
    }
 
