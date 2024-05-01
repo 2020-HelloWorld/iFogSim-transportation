@@ -15,6 +15,7 @@ import org.fog.application.selectivity.FractionalSelectivity;
 import org.fog.entities.*;
 import org.fog.entities.MicroserviceFogDevice;
 import org.fog.entities.PlacementRequest;
+import org.fog.gui.dialog.AddAppEdge;
 import org.fog.mobilitydata.DataParser;
 import org.fog.mobilitydata.RandomMobilityGenerator;
 import org.fog.mobilitydata.References;
@@ -37,7 +38,7 @@ public class AgricultureSimulation {
 
     static LocationHandler locator;
 
-    static boolean CLOUD = true;
+    static boolean CLOUD = false;
 
     static double SENSOR_TRANSMISSION_TIME = 10;
 
@@ -58,6 +59,24 @@ public class AgricultureSimulation {
     static int Cam_Per_Router = 2;
 
     static int totalArea = 1;
+    static int Pir_Per_Router = 1;
+    static String Pir_Device_Name = "PIR";
+    static String Pir_Sensor_Name = "PIR_SENSOR";
+
+    static String Motion_Detector = "motion_detector";
+
+    static String Pir_Tuple_Type = "PIR";
+
+    static  String Motion_Detector_Output = "MOTION_DETECTED";
+
+    static String Forwarder = "Forwarder";
+
+    static String Motion_Tracker = "MOTION_TRACKER";
+
+    static String Motion_Tracker_Output = "TRACKER_OUTPUT";
+    static String Motion_Analyzer_Output = "ANALYSIS";
+    static String Motion_Analyzer = "Motion_Analyzer";
+
 
     public static void main(String[] args) {
         try {
@@ -78,10 +97,16 @@ public class AgricultureSimulation {
 
             ModuleMapping moduleMapping = ModuleMapping.createModuleMapping();
             moduleMapping.addModuleToDevice("user_interface", "cloud");
+            moduleMapping.addModuleToDevice("user_interface_pir", "cloud");
 
             if(CLOUD) {
-                moduleMapping.addModuleToDevice("motion_detector", "cloud"); // placing all instances of Object Detector module in the Cloud
-               // moduleMapping.addModuleToDevice("object_tracker", "cloud"); // placing all instances of Object Tracker module in the Cloud
+                moduleMapping.addModuleToDevice("image_processor", "cloud"); // placing all instances of Object Detector module in the Cloud
+                moduleMapping.addModuleToDevice("object_detector","cloud");
+                moduleMapping.addModuleToDevice(Motion_Detector,"cloud");
+                moduleMapping.addModuleToDevice(Motion_Tracker_Output,"cloud");
+                moduleMapping.addModuleToDevice(Motion_Detector,"cloud");
+                moduleMapping.addModuleToDevice("object_tracker", "cloud"); // placing all instances of Object Tracker module in the Cloud
+
             }
             else {
                 for(FogDevice device : fogDevices) {
@@ -89,8 +114,20 @@ public class AgricultureSimulation {
                     String deviceName = device.getName();
                     String suffix = deviceName!=null?deviceName.split("_")[0]:deviceName;
                     if(Camera_Device_Name.equals(suffix)) {
-                        moduleMapping.addModuleToDevice("motion_detector", deviceName);
+                        moduleMapping.addModuleToDevice("image_processor", deviceName);
                     }
+                    if(Pir_Device_Name.equals(suffix)) {
+                        moduleMapping.addModuleToDevice(Motion_Detector,deviceName);
+                    }
+                    if(Router_Device_Name.equals(suffix)) {
+                        moduleMapping.addModuleToDevice("object_detector",deviceName);
+                        moduleMapping.addModuleToDevice(Motion_Tracker,deviceName);
+                    }
+                    if(Proxy_Server_Base_Name.equals(deviceName)) {
+                        moduleMapping.addModuleToDevice("object_tracker",deviceName);
+                        moduleMapping.addModuleToDevice(Motion_Analyzer,deviceName);
+                    }
+
                 }
             }
             Controller controller = null;
@@ -116,6 +153,7 @@ public class AgricultureSimulation {
 
 
     }
+
 
     private static FogDevice createFogDevice(String nodeName, long mips,
                                              int ram, long upBw, long downBw, int level, double ratePerMips, double busyPower, double idlePower) {
@@ -179,7 +217,7 @@ public class AgricultureSimulation {
 
     public static FogDevice createProxyServer(int parentId) {
 
-        FogDevice proxy = createFogDevice("proxy-server", 2800, 4000, 10000, 10000, 1, 0.0, 107.339, 83.4333);
+        FogDevice proxy = createFogDevice(Proxy_Server_Base_Name, 2800, 4000, 10000, 10000, 1, 0.01, 107.339, 83.4333);
         proxy.setParentId(parentId);
         return proxy;
     }
@@ -199,33 +237,52 @@ public class AgricultureSimulation {
          * Adding modules (vertices) to the application model (directed graph)
          */
         application.addAppModule("object_detector", 10);
-        application.addAppModule("motion_detector", 10);
+        application.addAppModule("image_processor", 10);
         application.addAppModule("object_tracker", 10);
         application.addAppModule("user_interface", 10);
+        application.addAppModule("user_interface_pir",10);
+        application.addAppModule(Motion_Detector,10);
+        // application.addAppModule(Forwarder,10);
+        application.addAppModule(Motion_Tracker,10);
+        application.addAppModule(Motion_Analyzer,10);
+
 
         /*
          * Connecting the application modules (vertices) in the application model (directed graph) with edges
          */
-        application.addAppEdge(Camera_Device_Name, "motion_detector", 1000, 20000, "CAMERA", Tuple.UP, AppEdge.SENSOR); // adding edge from CAMERA (sensor) to Motion Detector module carrying tuples of type CAMERA
-        application.addAppEdge("motion_detector", "object_detector", 2000, 2000, "MOTION_VIDEO_STREAM", Tuple.UP, AppEdge.MODULE); // adding edge from Motion Detector to Object Detector module carrying tuples of type MOTION_VIDEO_STREAM
+        application.addAppEdge(Camera_Device_Name, "image_processor", 1000, 20000, "CAMERA", Tuple.UP, AppEdge.SENSOR);
+        // application.addAppEdge(Camera_Device_Name,Motion_Detector,1000,2000,"PIR_RAW_DATA",Tuple.UP,AppEdge.SENSOR);
+        // adding edge from CAMERA (sensor) to Motion Detector module carrying tuples of type CAMERA
+        application.addAppEdge("image_processor", "object_detector", 2000, 2000, "MOTION_VIDEO_STREAM", Tuple.UP, AppEdge.MODULE); // adding edge from Motion Detector to Object Detector module carrying tuples of type MOTION_VIDEO_STREAM
         application.addAppEdge("object_detector", "user_interface", 500, 2000, "DETECTED_OBJECT", Tuple.UP, AppEdge.MODULE); // adding edge from Object Detector to User Interface module carrying tuples of type DETECTED_OBJECT
         application.addAppEdge("object_detector", "object_tracker", 1000, 100, "OBJECT_LOCATION", Tuple.UP, AppEdge.MODULE); // adding edge from Object Detector to Object Tracker module carrying tuples of type OBJECT_LOCATION
         application.addAppEdge("object_tracker", "PTZ_CONTROL", 100, 28, 100, "PTZ_PARAMS", Tuple.DOWN, AppEdge.ACTUATOR); // adding edge from Object Tracker to PTZ CONTROL (actuator) carrying tuples of type PTZ_PARAMS
 
+        application.addAppEdge(Pir_Device_Name,Motion_Detector,1000,200,Pir_Tuple_Type,Tuple.UP,AppEdge.SENSOR);
+        application.addAppEdge(Motion_Detector,Motion_Tracker,500,200,Motion_Detector_Output,Tuple.UP, AppEdge.MODULE);
+        application.addAppEdge(Motion_Tracker,Motion_Analyzer,1000,100,Motion_Tracker_Output,Tuple.UP,AppEdge.MODULE);
+        application.addAppEdge(Motion_Analyzer,"user_interface_pir",1000,200,Motion_Analyzer_Output,Tuple.UP,AppEdge.MODULE);
         /*
          * Defining the input-output relationships (represented by selectivity) of the application modules.
          */
-        application.addTupleMapping("motion_detector", "CAMERA", "MOTION_VIDEO_STREAM", new FractionalSelectivity(1.0)); // 1.0 tuples of type MOTION_VIDEO_STREAM are emitted by Motion Detector module per incoming tuple of type CAMERA
+        application.addTupleMapping("image_processor", "CAMERA", "MOTION_VIDEO_STREAM", new FractionalSelectivity(1.0)); // 1.0 tuples of type MOTION_VIDEO_STREAM are emitted by Motion Detector module per incoming tuple of type CAMERA
         application.addTupleMapping("object_detector", "MOTION_VIDEO_STREAM", "OBJECT_LOCATION", new FractionalSelectivity(1.0)); // 1.0 tuples of type OBJECT_LOCATION are emitted by Object Detector module per incoming tuple of type MOTION_VIDEO_STREAM
         application.addTupleMapping("object_detector", "MOTION_VIDEO_STREAM", "DETECTED_OBJECT", new FractionalSelectivity(0.05)); // 0.05 tuples of type MOTION_VIDEO_STREAM are emitted by Object Detector module per incoming tuple of type MOTION_VIDEO_STREAM
+
+        application.addTupleMapping(Motion_Detector,Pir_Tuple_Type,Motion_Detector_Output,new FractionalSelectivity(0.05));
+        application.addTupleMapping(Motion_Tracker,Motion_Detector_Output,Motion_Tracker_Output,new FractionalSelectivity(1.0));
+        application.addTupleMapping(Motion_Analyzer,Motion_Tracker_Output,Motion_Analyzer_Output,new FractionalSelectivity(1.0));
+        // application.addTupleMapping(Forwarder,Motion_Detector_Output,Motion_Detector_Output,new FractionalSelectivity(1.0));
 
         /*
          * Defining application loops (maybe incomplete loops) to monitor the latency of.
          * Here, we add two loops for monitoring : Motion Detector -> Object Detector -> Object Tracker and Object Tracker -> PTZ Control
          */
-        final AppLoop loop1 = new AppLoop(new ArrayList<String>(){{add("motion_detector");add("object_detector");add("object_tracker");}});
+        final AppLoop loop1 = new AppLoop(new ArrayList<String>(){{add("image_processor");add("object_detector");add("object_tracker");}});
         final AppLoop loop2 = new AppLoop(new ArrayList<String>(){{add("object_tracker");add("PTZ_CONTROL");}});
-        List<AppLoop> loops = new ArrayList<AppLoop>(){{add(loop1);add(loop2);}};
+
+       final AppLoop loop3 = new AppLoop(new ArrayList<String>(){{add(Motion_Detector);add(Motion_Tracker);add(Motion_Detector);}});
+        List<AppLoop> loops = new ArrayList<AppLoop>(){{add(loop1);add(loop2);add(loop3);}};
 
         application.setLoops(loops);
         return application;
@@ -233,25 +290,46 @@ public class AgricultureSimulation {
    public static FogDevice createCamera(int deviceNum,String appId,int userId,int parentId) {
        FogDevice camera = createFogDevice(Camera_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
        camera.setParentId(parentId);
-       Sensor sensor = new Sensor(Camera_Sensor_Name + "_"+deviceNum, Camera_Tuple_Type, userId, appId, new DeterministicDistribution(5)); // inter-transmission time of camera (sensor) follows a deterministic distribution
+       Sensor sensor = new Sensor(Camera_Sensor_Name + "_"+deviceNum, Camera_Tuple_Type, userId, appId, new DeterministicDistribution(5));
+       // Sensor Pir_sensor = new Sensor(Pir_Sensor_Name+"_"+deviceNum,"PIR_RAW_DATA",userId,appId,new DeterministicDistribution(5));
+       // inter-transmission time of camera (sensor) follows a deterministic distribution
        sensors.add(sensor);
+
+
        Actuator ptz = new Actuator(Ptz_Sensor_Name+"_" + deviceNum, userId, appId, Ptz_Actuator_Type);
        actuators.add(ptz);
        sensor.setGatewayDeviceId(camera.getId());
        sensor.setLatency(1.0);  // latency of connection between camera (sensor) and the parent Smart Camera is 1 ms
+
        ptz.setGatewayDeviceId(camera.getId());
        ptz.setLatency(1.0);  // latency of connection between PTZ Control and the parent Smart Camera is 1 ms
        return camera;
    }
 
+    public static FogDevice createPir(int deviceNum,String appId,int userId,int parentId) {
+        FogDevice Pir = createFogDevice(Pir_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
+        Pir.setParentId(parentId);
+        Sensor sensor = new Sensor(Pir_Sensor_Name + "_"+deviceNum,Pir_Tuple_Type, userId, appId, new DeterministicDistribution(5)); // inter-transmission time of camera (sensor) follows a deterministic distribution
+        sensors.add(sensor);
+        sensor.setGatewayDeviceId(Pir.getId());
+        sensor.setLatency(1.0);  // latency of connection between camera (sensor) and the parent Smart Camera is 1 ms
+        return Pir;
+    }
    public static void createAndPopulateRouter(int deviceNum,String appId,int userId,int parentId) {
        FogDevice router = createFogDevice(Router_Device_Name+"_"+deviceNum, 2800, 4000, 10000, 10000, 2, 0.005, 107.339, 83.4333);
        router.setParentId(parentId);
        fogDevices.add(router);
        for (int i=0;i<Cam_Per_Router;i++) {
            FogDevice cam = createCamera(i,appId,userId,router.getId());
+
            cam.setUplinkLatency(2);
            fogDevices.add(cam);
+
+       }
+       for (int j=0;j<Pir_Per_Router;j++) {
+           FogDevice pir = createPir(j,appId,userId, router.getId());
+           pir.setUplinkLatency(2);
+           fogDevices.add(pir);
        }
    }
 
