@@ -14,12 +14,6 @@ import org.fog.application.AppLoop;
 import org.fog.application.Application;
 import org.fog.application.selectivity.FractionalSelectivity;
 import org.fog.entities.*;
-import org.fog.entities.MicroserviceFogDevice;
-import org.fog.entities.PlacementRequest;
-import org.fog.gui.dialog.AddAppEdge;
-import org.fog.mobilitydata.DataParser;
-import org.fog.mobilitydata.RandomMobilityGenerator;
-import org.fog.mobilitydata.References;
 import org.fog.placement.*;
 import org.fog.policy.AppModuleAllocationPolicy;
 import org.fog.scheduler.StreamOperatorScheduler;
@@ -27,9 +21,7 @@ import org.fog.utils.FogLinearPowerModel;
 import org.fog.utils.FogUtils;
 import org.fog.utils.TimeKeeper;
 import org.fog.utils.distribution.DeterministicDistribution;
-import org.json.simple.parser.ParseException;
 
-import java.io.IOException;
 import java.util.*;
 public class TransportSimulation {
     static List<FogDevice> fogDevices = new ArrayList<FogDevice>();
@@ -38,7 +30,7 @@ public class TransportSimulation {
 
     static LocationHandler locator;
 
-    static boolean CLOUD = true;
+    static boolean CLOUD = false;
 
     static double SENSOR_TRANSMISSION_TIME = 10;
 
@@ -46,39 +38,43 @@ public class TransportSimulation {
 
     static String Proxy_Server_Base_Name = "proxyServer";
 
-    static String Camera_Device_Name = "CAMERA";
+    static String Biometric_Device_Name = "BIOMETRIC";
     static String Ptz_Sensor_Name  = "PTZ";
 
-    static String Camera_Sensor_Name = "CameraSensor";
+    static String Biometric_Sensor_Type = "CameraSensor";
 
-    static String Camera_Tuple_Type = "CAMERA";
+    static String Biometric_Tuple_Type = "BIOMETRIC";
+    
+    static String Biometric_Analyzer = "Biometric_Analyzer";
+    
+    static String Biometric_Analyzer_Output = "BIOMETRIC_MEASURES";
 
     static String Ptz_Actuator_Type = "PTZ_CONTROL";
 
     static String Router_Device_Name = "Router";
-    static int Cam_Per_Router = 1;
+    static int Biometric_Per_Router = 1;
 
-    static int totalArea = 1;
-    static int Pir_Per_Router = 1;
-    static String Pir_Device_Name = "PIR";
-    static String Pir_Sensor_Name = "PIR_SENSOR";
+    static int totalTransportationUnits = 1;
+    static int ProximitySensor_Per_Router = 1;
+    static String Proximity_Device_Name = "PROXIMITY";
+    static String Proximity_Sensor_Name = "PROXIMITY_SENSOR";
 
-    static String Pir_Tuple_Type = "PIR";
-
-    //
-    static int Temp_Per_Router = 1;
-    static String Temp_Device_Name = "TEMP";
-    static String Temp_Sensor_Name = "Temperature_SENSOR";
-
-    static String High_Temperature_Detector = "Temperature_Analyzer";
-
-    static String High_Temperature_Detector_Output = "Temperature_Analyzer_Output";
-
-    static String Temp_Tuple_Type = "TEMP";
+    static String Proximity_Tuple_Type = "PROXIMITY";
 
     //
-    static String Motion_Detector = "motion_detector";
-    static  String Motion_Detector_Output = "MOTION_DETECTED";
+    static int Accelerometer_Per_Router = 1;
+    static String Accelerometer_Device_Name = "ACCELEROMETER";
+    static String Accelerometer_Sensor_Name = "ACCELEROMETER_SENSOR";
+
+    static String High_Acceleration_Detector = "ACCELERATION_Analyzer";
+
+    static String High_Acceleration_Detector_Output = "Acceleration_Analyzer_Output";
+
+    static String Acceleration_Tuple_Type = "ACCELEROMETER";
+
+    //
+    static String Proximity_Detector = "proximity_detector";
+    static  String Proximity_Detector_Output = "PROXIMITY_DETECTED";
 
     static String Forwarder_Temp = "Forwarder";
 
@@ -104,17 +100,17 @@ public class TransportSimulation {
 
 
     //
-    static int WaterAndAir_Per_Router = 1;
-    static String WaterAndAir_Device_Name = "WAA";
-    static String WaterAndAir_Sensor_Name = "WATER_AND_AIR_QUALITY_SENSOR";
+    static int Cam_Per_Router = 1;
+    static String Camera_Device_Name = "CAMERA";
+    static String Camera_Sensor_Name = "CAMERA_SENSOR";
 
-    static String Quality_ANALYZER = "QUALITY_Analyzer";
+    static String Image_Processor = "Image_Processor";
 
-    static String Quality_ANALYZER_OUTPUT = "QUALITY_Alert";
+    static String Object_Detetion_Output = "Identified_Object";
 
-    static String WaterAndAir_Tuple_Type = "WAA";
+    static String Camera_Tuple_Type = "CAMERA";
 
-    static String Forwarder_WA = "Forwarder_WA";
+    static String Forwarder_Cam = "Forwarder_Cam";
     //
 
 
@@ -140,15 +136,14 @@ public class TransportSimulation {
             moduleMapping.addModuleToDevice("user_interface_pir", "cloud");
 
             if(CLOUD) {
-                moduleMapping.addModuleToDevice("image_processor", "cloud"); // placing all instances of Object Detector module in the Cloud
-                moduleMapping.addModuleToDevice("object_detector","cloud");
-                moduleMapping.addModuleToDevice(Motion_Detector,"cloud");
+                moduleMapping.addModuleToDevice("biometric_detector", "cloud"); // placing all instances of Object Detector module in the Cloud
+                moduleMapping.addModuleToDevice(Biometric_Analyzer,"cloud");
+                moduleMapping.addModuleToDevice(Proximity_Detector,"cloud");
                 moduleMapping.addModuleToDevice(Motion_Tracker_Output,"cloud");
-                moduleMapping.addModuleToDevice(Motion_Detector,"cloud");
-                moduleMapping.addModuleToDevice("object_tracker", "cloud");
-                moduleMapping.addModuleToDevice(Quality_ANALYZER,"cloud");
+                moduleMapping.addModuleToDevice(Proximity_Detector,"cloud");
+                moduleMapping.addModuleToDevice(Image_Processor,"cloud");
 //                moduleMapping.addModuleToDevice(Forwarder_WA,"cloud");
-                moduleMapping.addModuleToDevice(High_Temperature_Detector,"cloud");// placing all instances of Object Tracker module in the Cloud
+                moduleMapping.addModuleToDevice(High_Acceleration_Detector,"cloud");// placing all instances of Object Tracker module in the Cloud
 //                moduleMapping.addModuleToDevice(Forwarder_Temp,"cloud");
                 moduleMapping.addModuleToDevice(FIRE_ANALYZER,"cloud");
 //                moduleMapping.addModuleToDevice(Forwarder_Smoke,"cloud");
@@ -161,34 +156,33 @@ public class TransportSimulation {
                     // adding motion detecting functionality (computations) directly inside camera
                     String deviceName = device.getName();
                     String suffix = deviceName!=null?deviceName.split("_")[0]:deviceName;
-                    if(Camera_Device_Name.equals(suffix)) {
-                        moduleMapping.addModuleToDevice("image_processor", deviceName);
+                    if(Biometric_Device_Name.equals(suffix)) {
+                        moduleMapping.addModuleToDevice("biometric_detector", deviceName);
                     }
-                    if(Pir_Device_Name.equals(suffix)) {
-                        moduleMapping.addModuleToDevice(Motion_Detector,deviceName);
+                    if(Proximity_Device_Name.equals(suffix)) {
+                        moduleMapping.addModuleToDevice(Proximity_Detector,deviceName);
                     }
-                    if(Temp_Device_Name.equals(suffix)) {
-                        moduleMapping.addModuleToDevice(High_Temperature_Detector,deviceName);
+                    if(Accelerometer_Device_Name.equals(suffix)) {
+                        moduleMapping.addModuleToDevice(High_Acceleration_Detector,deviceName);
                     }
                     if(SmokeDetector_Device_Name.equals(suffix)) {
                         moduleMapping.addModuleToDevice(FIRE_ANALYZER,deviceName);
                     }
-                    if(WaterAndAir_Device_Name.equals(suffix)) {
-                        moduleMapping.addModuleToDevice(Quality_ANALYZER,deviceName);
+                    if(Camera_Device_Name.equals(suffix)) {
+                        moduleMapping.addModuleToDevice(Image_Processor,deviceName);
                     }
                     if(Router_Device_Name.equals(suffix)) {
-                        moduleMapping.addModuleToDevice("object_detector",deviceName);
+                        moduleMapping.addModuleToDevice(Biometric_Analyzer,deviceName);
                         moduleMapping.addModuleToDevice(Motion_Tracker,deviceName);
                         moduleMapping.addModuleToDevice(Forwarder_Temp,deviceName);
                         moduleMapping.addModuleToDevice(Forwarder_Smoke,deviceName);
-                        moduleMapping.addModuleToDevice(Forwarder_WA,deviceName);
+                        moduleMapping.addModuleToDevice(Forwarder_Cam,deviceName);
                     }
                     if(Proxy_Server_Base_Name.equals(deviceName)) {
-                        moduleMapping.addModuleToDevice("object_tracker",deviceName);
                         moduleMapping.addModuleToDevice(Motion_Analyzer,deviceName);
                         moduleMapping.addModuleToDevice(Forwarder_Temp,deviceName);
                         moduleMapping.addModuleToDevice(Forwarder_Smoke,deviceName);
-                        moduleMapping.addModuleToDevice(Forwarder_WA,deviceName);
+                        moduleMapping.addModuleToDevice(Forwarder_Cam,deviceName);
                     }
 
                 }
@@ -300,12 +294,12 @@ public class TransportSimulation {
         /*
          * Adding modules (vertices) to the application model (directed graph)
          */
-        application.addAppModule("object_detector", 10);
-        application.addAppModule("image_processor", 10);
-        application.addAppModule("object_tracker", 10);
+        application.addAppModule(Biometric_Analyzer, 10);
+        application.addAppModule("biometric_detector", 10);
+
         application.addAppModule("user_interface", 10);
         application.addAppModule("user_interface_pir",10);
-        application.addAppModule(Motion_Detector,10);
+        application.addAppModule(Proximity_Detector,10);
         // application.addAppModule(Forwarder,10);
         application.addAppModule(Motion_Tracker,10);
         application.addAppModule(Motion_Analyzer,10);
@@ -314,36 +308,35 @@ public class TransportSimulation {
         /*
          * Connecting the application modules (vertices) in the application model (directed graph) with edges
          */
-        application.addAppEdge(Camera_Device_Name, "image_processor", 1000, 20000, "CAMERA", Tuple.UP, AppEdge.SENSOR);
+        application.addAppEdge(Biometric_Device_Name, "biometric_detector", 1000, 20000, Biometric_Tuple_Type, Tuple.UP, AppEdge.SENSOR);
         // application.addAppEdge(Camera_Device_Name,Motion_Detector,1000,2000,"PIR_RAW_DATA",Tuple.UP,AppEdge.SENSOR);
         // adding edge from CAMERA (sensor) to Motion Detector module carrying tuples of type CAMERA
-        application.addAppEdge("image_processor", "object_detector", 2000, 2000, "MOTION_VIDEO_STREAM", Tuple.UP, AppEdge.MODULE); // adding edge from Motion Detector to Object Detector module carrying tuples of type MOTION_VIDEO_STREAM
-        application.addAppEdge("object_detector", "user_interface", 500, 2000, "DETECTED_OBJECT", Tuple.UP, AppEdge.MODULE); // adding edge from Object Detector to User Interface module carrying tuples of type DETECTED_OBJECT
-        application.addAppEdge("object_detector", "object_tracker", 1000, 100, "OBJECT_LOCATION", Tuple.UP, AppEdge.MODULE); // adding edge from Object Detector to Object Tracker module carrying tuples of type OBJECT_LOCATION
-        application.addAppEdge("object_tracker", "PTZ_CONTROL", 100, 28, 100, "PTZ_PARAMS", Tuple.DOWN, AppEdge.ACTUATOR); // adding edge from Object Tracker to PTZ CONTROL (actuator) carrying tuples of type PTZ_PARAMS
+        application.addAppEdge("biometric_detector", Biometric_Analyzer, 2000, 2000, "MEASURES", Tuple.UP, AppEdge.MODULE); // adding edge from Motion Detector to Object Detector module carrying tuples of type MOTION_VIDEO_STREAM
+        application.addAppEdge(Biometric_Analyzer, "user_interface", 500, 2000, "BIOMETRIC_DETAILS", Tuple.UP, AppEdge.MODULE); // adding edge from Object Detector to User Interface module carrying tuples of type DETECTED_OBJECT
 
 
 
-        application = addSecondarySensor(application,WaterAndAir_Device_Name,WaterAndAir_Tuple_Type,Quality_ANALYZER,Quality_ANALYZER_OUTPUT,Forwarder_WA);
+
+
+        application = addSecondarySensor(application, Camera_Device_Name, Camera_Tuple_Type, Image_Processor, Object_Detetion_Output, Forwarder_Cam);
         application = addSecondarySensor(application,SmokeDetector_Device_Name,Smoke_Tuple_Type,FIRE_ANALYZER,FIRE_ANALYZER_OUTPUT,Forwarder_Smoke);
-        application = addSecondarySensor(application,Temp_Device_Name,Temp_Tuple_Type,High_Temperature_Detector,High_Temperature_Detector_Output,Forwarder_Temp);
+        application = addSecondarySensor(application, Accelerometer_Device_Name, Acceleration_Tuple_Type, High_Acceleration_Detector, High_Acceleration_Detector_Output,Forwarder_Temp);
 
 
 
 
-        application.addAppEdge(Pir_Device_Name,Motion_Detector,1000,200,Pir_Tuple_Type,Tuple.UP,AppEdge.SENSOR);
-        application.addAppEdge(Motion_Detector,Motion_Tracker,500,200,Motion_Detector_Output,Tuple.UP, AppEdge.MODULE);
+        application.addAppEdge(Proximity_Device_Name, Proximity_Detector,1000,200, Proximity_Tuple_Type,Tuple.UP,AppEdge.SENSOR);
+        application.addAppEdge(Proximity_Detector,Motion_Tracker,500,200, Proximity_Detector_Output,Tuple.UP, AppEdge.MODULE);
         application.addAppEdge(Motion_Tracker,Motion_Analyzer,1000,100,Motion_Tracker_Output,Tuple.UP,AppEdge.MODULE);
         application.addAppEdge(Motion_Analyzer,"user_interface_pir",1000,200,Motion_Analyzer_Output,Tuple.UP,AppEdge.MODULE);
         /*
          * Defining the input-output relationships (represented by selectivity) of the application modules.
          */
-        application.addTupleMapping("image_processor", "CAMERA", "MOTION_VIDEO_STREAM", new FractionalSelectivity(1.0)); // 1.0 tuples of type MOTION_VIDEO_STREAM are emitted by Motion Detector module per incoming tuple of type CAMERA
-        application.addTupleMapping("object_detector", "MOTION_VIDEO_STREAM", "OBJECT_LOCATION", new FractionalSelectivity(1.0)); // 1.0 tuples of type OBJECT_LOCATION are emitted by Object Detector module per incoming tuple of type MOTION_VIDEO_STREAM
-        application.addTupleMapping("object_detector", "MOTION_VIDEO_STREAM", "DETECTED_OBJECT", new FractionalSelectivity(0.05)); // 0.05 tuples of type MOTION_VIDEO_STREAM are emitted by Object Detector module per incoming tuple of type MOTION_VIDEO_STREAM
+        application.addTupleMapping("biometric_detector", Biometric_Tuple_Type, "MEASURES", new FractionalSelectivity(1.0)); // 1.0 tuples of type MOTION_VIDEO_STREAM are emitted by Motion Detector module per incoming tuple of type CAMERA
+        application.addTupleMapping(Biometric_Analyzer, "MEASURES", "BIOMETRIC_DETAILS", new FractionalSelectivity(0.05)); // 0.05 tuples of type MOTION_VIDEO_STREAM are emitted by Object Detector module per incoming tuple of type MOTION_VIDEO_STREAM
 
-        application.addTupleMapping(Motion_Detector,Pir_Tuple_Type,Motion_Detector_Output,new FractionalSelectivity(0.05));
-        application.addTupleMapping(Motion_Tracker,Motion_Detector_Output,Motion_Tracker_Output,new FractionalSelectivity(1.0));
+        application.addTupleMapping(Proximity_Detector, Proximity_Tuple_Type, Proximity_Detector_Output,new FractionalSelectivity(0.05));
+        application.addTupleMapping(Motion_Tracker, Proximity_Detector_Output,Motion_Tracker_Output,new FractionalSelectivity(1.0));
         application.addTupleMapping(Motion_Analyzer,Motion_Tracker_Output,Motion_Analyzer_Output,new FractionalSelectivity(1.0));
         // application.addTupleMapping(Forwarder,Motion_Detector_Output,Motion_Detector_Output,new FractionalSelectivity(1.0));
 
@@ -353,19 +346,18 @@ public class TransportSimulation {
          * Defining application loops (maybe incomplete loops) to monitor the latency of.
          * Here, we add two loops for monitoring : Motion Detector -> Object Detector -> Object Tracker and Object Tracker -> PTZ Control
          */
-        final AppLoop loop1 = new AppLoop(new ArrayList<String>(){{add("image_processor");add("object_detector");add("object_tracker");}});
-        final AppLoop loop2 = new AppLoop(new ArrayList<String>(){{add("object_tracker");add("PTZ_CONTROL");}});
+        final AppLoop loop1 = new AppLoop(new ArrayList<String>(){{add("biometric_detector");add(Biometric_Analyzer);add("object_tracker");}});
 
-        final AppLoop loop3 = new AppLoop(new ArrayList<String>(){{add(Motion_Detector);add(Motion_Tracker);add(Motion_Detector);}});
-        final AppLoop loop4 = new AppLoop(new ArrayList<String>(){{add(High_Temperature_Detector);add(Forwarder_Temp);}});
+        final AppLoop loop3 = new AppLoop(new ArrayList<String>(){{add(Proximity_Detector);add(Motion_Tracker);add(Proximity_Detector);}});
+        final AppLoop loop4 = new AppLoop(new ArrayList<String>(){{add(High_Acceleration_Detector);add(Forwarder_Temp);}});
 
         final AppLoop loop5 = new AppLoop(new ArrayList<String>(){{add(FIRE_ANALYZER);add(Forwarder_Smoke);}});
 
-        final AppLoop loop6 = new AppLoop(new ArrayList<String>(){{add(Quality_ANALYZER);add(Forwarder_WA);}});
+        final AppLoop loop6 = new AppLoop(new ArrayList<String>(){{add(Image_Processor);add(Forwarder_Cam);}});
 
 
 
-        List<AppLoop> loops = new ArrayList<AppLoop>(){{add(loop1);add(loop2);add(loop3);add(loop4);add(loop5);add(loop6);}};
+        List<AppLoop> loops = new ArrayList<AppLoop>(){{add(loop1);add(loop3);add(loop4);add(loop5);add(loop6);}};
 
         application.setLoops(loops);
         return application;
@@ -395,40 +387,34 @@ public class TransportSimulation {
 //    public static Application addFogDeviceToApplication(Application application) {
 //
 //    }
-    public static FogDevice createCamera(int deviceNum,String appId,int userId,int parentId) {
-        FogDevice camera = createFogDevice(Camera_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
+    public static FogDevice createBiometric(int deviceNum, String appId, int userId, int parentId) {
+        FogDevice camera = createFogDevice(Biometric_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
         camera.setParentId(parentId);
-        Sensor sensor = new Sensor(Camera_Sensor_Name + "_"+deviceNum, Camera_Tuple_Type, userId, appId, new DeterministicDistribution(5));
-        // Sensor Pir_sensor = new Sensor(Pir_Sensor_Name+"_"+deviceNum,"PIR_RAW_DATA",userId,appId,new DeterministicDistribution(5));
-        // inter-transmission time of camera (sensor) follows a deterministic distribution
+        Sensor sensor = new Sensor(Biometric_Sensor_Type + "_"+deviceNum, Biometric_Tuple_Type, userId, appId, new DeterministicDistribution(5));
+
         sensors.add(sensor);
 
 
-        Actuator ptz = new Actuator(Ptz_Sensor_Name+"_" + deviceNum, userId, appId, Ptz_Actuator_Type);
-        actuators.add(ptz);
         sensor.setGatewayDeviceId(camera.getId());
-        sensor.setLatency(1.0);  // latency of connection between camera (sensor) and the parent Smart Camera is 1 ms
-
-        ptz.setGatewayDeviceId(camera.getId());
-        ptz.setLatency(1.0);  // latency of connection between PTZ Control and the parent Smart Camera is 1 ms
+        sensor.setLatency(1.0);
         return camera;
     }
 
-    public static FogDevice createPir(int deviceNum,String appId,int userId,int parentId) {
-        FogDevice Pir = createFogDevice(Pir_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
+    public static FogDevice createProximityDevice(int deviceNum, String appId, int userId, int parentId) {
+        FogDevice Pir = createFogDevice(Proximity_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
         Pir.setParentId(parentId);
-        Sensor sensor = new Sensor(Pir_Sensor_Name + "_"+deviceNum,Pir_Tuple_Type, userId, appId, new DeterministicDistribution(5)); // inter-transmission time of camera (sensor) follows a deterministic distribution
+        Sensor sensor = new Sensor(Proximity_Sensor_Name + "_"+deviceNum, Proximity_Tuple_Type, userId, appId, new DeterministicDistribution(5)); // inter-transmission time of camera (sensor) follows a deterministic distribution
         sensors.add(sensor);
         sensor.setGatewayDeviceId(Pir.getId());
-        sensor.setLatency(1.0);  // latency of connection between camera (sensor) and the parent Smart Camera is 1 ms
+        sensor.setLatency(1.0);  
         return Pir;
     }
 
 
-    public static FogDevice createTemperatureSensor(int deviceNum,String appId,int userId,int parentId) {
-        FogDevice temp = createFogDevice(Temp_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
+    public static FogDevice createAccelerometer(int deviceNum, String appId, int userId, int parentId) {
+        FogDevice temp = createFogDevice(Accelerometer_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
         temp.setParentId(parentId);
-        Sensor sensor = new Sensor(Temp_Sensor_Name + "_"+deviceNum,Temp_Tuple_Type, userId, appId, new DeterministicDistribution(5)); // inter-transmission time of camera (sensor) follows a deterministic distribution
+        Sensor sensor = new Sensor(Accelerometer_Sensor_Name + "_"+deviceNum, Acceleration_Tuple_Type, userId, appId, new DeterministicDistribution(5)); // inter-transmission time of camera (sensor) follows a deterministic distribution
         sensors.add(sensor);
         sensor.setGatewayDeviceId(temp.getId());
         sensor.setLatency(1.0);  // latency of connection between camera (sensor) and the parent Smart Camera is 1 ms
@@ -445,10 +431,10 @@ public class TransportSimulation {
         return smokedetector;
     }
 
-    public static FogDevice createWaterAndAirSensor(int deviceNum,String appId,int userId,int parentId) {
-        FogDevice WaterAndAirQualityDetector = createFogDevice(WaterAndAir_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
+    public static FogDevice createCamera(int deviceNum, String appId, int userId, int parentId) {
+        FogDevice WaterAndAirQualityDetector = createFogDevice(Camera_Device_Name + "_" + deviceNum, 500, 1000, 10000, 10000, 3, 0.005, 87.53, 82.44);
         WaterAndAirQualityDetector.setParentId(parentId);
-        Sensor sensor = new Sensor(WaterAndAir_Sensor_Name + "_"+deviceNum,WaterAndAir_Tuple_Type, userId, appId, new DeterministicDistribution(5)); // inter-transmission time of camera (sensor) follows a deterministic distribution
+        Sensor sensor = new Sensor(Camera_Sensor_Name + "_"+deviceNum, Camera_Tuple_Type, userId, appId, new DeterministicDistribution(5)); // inter-transmission time of camera (sensor) follows a deterministic distribution
         sensors.add(sensor);
         sensor.setGatewayDeviceId(WaterAndAirQualityDetector.getId());
         sensor.setLatency(1.0);  // latency of connection between camera (sensor) and the parent Smart Camera is 1 ms
@@ -458,19 +444,19 @@ public class TransportSimulation {
         FogDevice router = createFogDevice(Router_Device_Name+"_"+deviceNum, 2800, 4000, 10000, 10000, 2, 0.005, 107.339, 83.4333);
         router.setParentId(parentId);
         fogDevices.add(router);
-        for (int i=0;i<Cam_Per_Router;i++) {
-            FogDevice cam = createCamera(i,appId,userId,router.getId());
+        for (int i = 0; i< Biometric_Per_Router; i++) {
+            FogDevice cam = createBiometric(i,appId,userId,router.getId());
 
             cam.setUplinkLatency(2);
             fogDevices.add(cam);
         }
-        for (int j=0;j<Pir_Per_Router;j++) {
-            FogDevice pir = createPir(j,appId,userId, router.getId());
+        for (int j = 0; j< ProximitySensor_Per_Router; j++) {
+            FogDevice pir = createProximityDevice(j,appId,userId, router.getId());
             pir.setUplinkLatency(2);
             fogDevices.add(pir);
         }
-        for (int k=0;k<Temp_Per_Router;k++) {
-            FogDevice temp = createTemperatureSensor(k,appId,userId, router.getId());
+        for (int k = 0; k< Accelerometer_Per_Router; k++) {
+            FogDevice temp = createAccelerometer(k,appId,userId, router.getId());
             temp.setUplinkLatency(2);
             fogDevices.add(temp);
         }
@@ -479,8 +465,8 @@ public class TransportSimulation {
             smoke_detector.setUplinkLatency(2);
             fogDevices.add(smoke_detector);
         }
-        for (int n=0;n<WaterAndAir_Per_Router;n++) {
-            FogDevice smoke_detector = createWaterAndAirSensor(n,appId,userId, router.getId());
+        for (int n = 0; n< Cam_Per_Router; n++) {
+            FogDevice smoke_detector = createCamera(n,appId,userId, router.getId());
             smoke_detector.setUplinkLatency(2);
             fogDevices.add(smoke_detector);
         }
@@ -491,7 +477,7 @@ public class TransportSimulation {
         fogDevices.add(cloudServer);
         FogDevice proxyServer = createProxyServer(cloudServer.getId());
         fogDevices.add(proxyServer);
-        for (int i=0;i<totalArea;i++) {
+        for (int i = 0; i< totalTransportationUnits; i++) {
             createAndPopulateRouter(i,appId,userId, proxyServer.getId());
         }
     }
